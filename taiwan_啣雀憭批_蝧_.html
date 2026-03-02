@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 變色龍大富翁 - 台灣環島完全版</title>
+    <style>
+        /* --- 🎨 變色龍主題變數 (CSS) --- */
+        :root {
+            /* 預設顏色 (台灣景點) */
+            --main-hue: #2e7d32;
+            --bg-color: #f1f8e9;
+            --board-bg: #558b2f;
+            --tile-bg: #ffffff;
+            --center-bg: #dcedc8;
+            --text-color: #333;
+            --btn-bg: #689f38;
+            --btn-hover: #33691e;
+
+            /* 特殊格子顏色 */
+            --chance-color: #e67e22; /* 特殊挑戰 */
+            --jail-color: #95a5a6; /* 監獄 */
+            
+            /* 網格設定：經典大富翁為 11x11 */
+            --grid-size: 11; 
+            
+            /* 地產分組顏色 (依台灣區域分色) */
+            --group-north: #F44336; /* 北部-紅 */
+            --group-center: #FF9800; /* 中部-橘 */
+            --group-south: #FFEB3B; /* 南部-黃 */
+            --group-east: #4CAF50;  /* 東部-綠 */
+            --group-island: #2196F3; /* 離島-藍 */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.5s;
+            overflow-x: hidden; /* 防止滑入動畫導致滾動條 */
+        }
+
+        /* --- 🖥️ 遊戲畫面佈局 --- */
+        #container {
+            display: flex;
+            min-height: 10vh;
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        #left-panel {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        #game-screen {
+            display: none; 
+            flex-grow: 1;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* --- 🎲 遊戲主板 (Board) --- */
+        #board-area {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            aspect-ratio: 1 / 1; 
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        #board {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: var(--board-bg);
+            border: 8px solid var(--board-bg);
+            border-radius: 12px;
+            display: grid;
+            grid-template-columns: repeat(var(--grid-size), 1fr);
+            grid-template-rows: repeat(var(--grid-size), 1fr);
+            position: relative;
+        }
+
+        /* 中心區域 */
+        .center-area {
+            grid-column: 2 / calc(var(--grid-size));
+            grid-row: 2 / calc(var(--grid-size));
+            background-color: var(--center-bg);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .center-area h2 {
+            margin-top: 0;
+            font-size: 2em;
+            color: var(--main-hue);
+        }
+        
+        /* 骰子與按鈕 */
+        #dice-control {
+            margin-top: 15px;
+        }
+        
+        #dice-display {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--main-hue);
+        }
+
+        /* --- 📍 地圖格子 (Tile) --- */
+        .tile {
+            background-color: var(--tile-bg);
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 2px;
+            font-size: 10px;
+            text-align: center;
+            position: relative;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .tile-header {
+            width: 100%;
+            height: 20%; 
+            margin-bottom: 2px;
+            border-bottom: 1px solid rgba(0,0,0,0.1); 
+        }
+        
+        .tile-content {
+            width: 100%;
+            height: 80%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .tile-name {
+            font-weight: bold;
+            font-size: 11px;
+            line-height: 1.2;
+            margin-bottom: 2px;
+        }
+
+        /* 垂直排列修正 (左側和右側) */
+        .tile.vertical .tile-name {
+            writing-mode: horizontal-tb;
+            white-space: normal; 
+        }
+
+        /* --- 🧍 玩家 Token --- */
+        .player-token {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+            transition: all 0.3s ease-out;
+            z-index: 10;
+            bottom: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 9px;
+            color: white;
+            font-weight: bold;
+        }
+
+        /* Token 自動排列位置，避免重疊 */
+        .tile[data-player-count="1"] .player-token:nth-of-type(1) { left: 50%; transform: translateX(-50%); }
+        .tile[data-player-count="2"] .player-token:nth-of-type(1) { left: 25%; }
+        .tile[data-player-count="2"] .player-token:nth-of-type(2) { left: 60%; }
+        /* 更多玩家時可依此類推 */
+
+        /* --- 📰 資訊側邊欄 --- */
+        .panel {
+            background-color: var(--tile-bg);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--board-bg);
+        }
+        
+        .player-card {
+            border-left: 6px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .player-card.active {
+            box-shadow: 0 0 8px var(--main-hue);
+            background-color: #fff;
+            transform: scale(1.02);
+        }
+
+        #log-area {
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.9em;
+            line-height: 1.5;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        /* --- ⚙️ 設定畫面 --- */
+        #setup-screen {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 40px;
+            max-width: 700px;
+            margin: 30px auto;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        #setup-screen h1 {
+            color: var(--main-hue);
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .setup-group {
+            border: 1px solid #eee;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        /* 📜 遊戲說明區塊 */
+        .instructions-box {
+            background-color: #fff3e0;
+            border-left: 6px solid #ff9800;
+            padding: 20px;
+            border-radius: 5px;
+            font-size: 0.95em;
+            color: #333;
+        }
+        .instructions-box h3 { 
+            margin-top: 0; 
+            color: #ef6c00; 
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .instructions-box ul { 
+            padding-left: 20px; 
+            margin-bottom: 0; 
+        }
+        .instructions-box li { 
+            margin-bottom: 8px; 
+            line-height: 1.5; 
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        /* --- 🆕 即時動態卡片 (Status Toast) --- */
+        #status-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 15px 30px;
+            border-radius: 50px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            pointer-events: none; /* 不擋滑鼠 */
+            border: 2px solid transparent;
+        }
+
+        /* Toast 顯示時的狀態 */
+        #status-toast.show {
+            top: 50px;
+            opacity: 1;
+        }
+
+        #status-icon {
+            font-size: 1.5em;
+        }
+
+        /* --- 🖼️ Modal 視窗 (通用 & 三選一) --- */
+        #modal, #rewardModal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 550px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            text-align: left;
+            position: relative;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-title {
+            font-size: 1.5em;
+            color: var(--main-hue);
+            margin-top: 0;
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .modal-body {
+            margin: 15px 0;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+
+        .hint-box {
+            background-color: #e8f5e9;
+            border-left: 5px solid #4caf50;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 0.95em;
+            color: #2e7d32;
+        }
+
+        .analysis-box {
+            background-color: #e3f2fd;
+            border-left: 5px solid #2196f3;
+            padding: 10px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            white-space: pre-line; /* 保留換行 */
+        }
+
+        .option-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 1em;
+        }
+
+        .option-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        /* 獎勵視窗按鈕 */
+        .reward-btn {
+            width: 100%;
+            margin: 8px 0;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            transition: transform 0.1s;
+        }
+        .reward-btn:active { transform: scale(0.98); }
+        .btn-buy { background: #4CAF50; }
+        .btn-money { background: #FFC107; color: black; }
+        .btn-roll { background: #2196F3; }
+
+        /* --- 共通按鈕 --- */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            background-color: var(--btn-bg);
+            font-size: 1em;
+        }
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        /* 選單按鈕樣式 */
+        .menu-btn {
+            flex: 1;
+            padding: 12px;
+            font-size: 1em;
+            transition: opacity 0.2s;
+        }
+        .menu-btn:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+
+    <div id="setup-screen">
+        <h1>🇹🇼 AI 變色龍大富翁 - 台灣環島版</h1>
+
+        <div class="setup-group">
+            <h2>👤 玩家設定</h2>
+            <label for="player-count">玩家人數 (2-4人)</label>
+            <input type="number" id="player-count" value="2" min="2" max="4" onchange="updatePlayerInputs()">
+            
+            <div id="player-names-container" style="margin-top: 15px;"></div>
+        </div>
+
+        <div class="setup-group">
+            <h2>📝 規則設定</h2>
+            <label for="initial-money">初始資金 ($)</label>
+            <input type="number" id="initial-money" value="20000" min="5000" step="1000">
+
+            <label for="game-turns">遊戲回合數</label>
+            <input type="number" id="game-turns" value="20" min="5" max="100">
+        </div>
+
+        <div class="instructions-box">
+            <h3>📖 遊戲玩法說明</h3>
+            <ul>
+                <li><strong>🎲 擲骰移動：</strong> 輪流擲骰子，在台灣地圖上前進。</li>
+                <li><strong>📍 佔領景點：</strong> 走到無主地，答對問題可享 <strong style="color:#d32f2f;">9折優惠價</strong> 買下，或選擇拿獎金、再骰一次。</li>
+                <li><strong>💰 支付租金：</strong> 走到別人的地，答對問題「租金打5折」，答錯則需「支付全額」。</li>
+                <li><strong>✨ 特殊挑戰：</strong> 地圖中藏有歷史、動物等特殊關卡，答對可依難度獲得高額獎金！</li>
+                <li><strong>🏆 勝利條件：</strong> 回合結束時總資產最高者獲勝，或直到對手破產。</li>
+            </ul>
+        </div>
+
+        <br>
+        <button class="btn" onclick="startGame()" style="width:100%; padding: 15px; font-size: 1.2em;">🚀 開始遊戲</button>
+    </div>
+
+    <div id="status-toast">
+        <span id="status-icon">📢</span>
+        <span id="status-text">遊戲開始！</span>
+    </div>
+
+    <div id="game-screen">
+        <div id="container">
+            <div id="left-panel">
+                <div class="panel">
+                    <h3>⚙️ 系統選單</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn menu-btn" style="background-color: #e74c3c;" onclick="game.endGameNow()">🏁 結束遊戲</button>
+                        <button class="btn menu-btn" style="background-color: #7f8c8d;" onclick="location.reload()">🏠 回首頁</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>🏆 玩家資產</h3>
+                    <div id="players-stats"></div>
+                </div>
+                <div class="panel">
+                    <h3>📜 遊戲紀錄</h3>
+                    <div id="log-area">歡迎來到台灣環島大富翁！請擲骰子開始冒險。</div>
+                </div>
+            </div>
+
+            <div id="board-area">
+                <div id="board">
+                    <div class="center-area">
+                        <h2>台灣環島</h2>
+                        <p>回合：<span id="current-turn">1</span> / <span id="turns-left">20</span></p>
+                        <h3 style="color: var(--main-hue);">輪到：<span id="active-player-name">玩家1</span></h3>
+                        
+                        <div id="dice-control">
+                            <div id="dice-display">🎲</div>
+                            <button id="btn-roll" class="btn" onclick="game.rollDice()">擲骰子 GO!</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal" style="display:none;">
+        <div class="modal-content">
+            <h3 id="modal-title" class="modal-title">題目</h3>
+            <div id="modal-body" class="modal-body"></div>
+            <div id="modal-options"></div> <div id="modal-footer" style="text-align:center; margin-top:20px;"></div>
+        </div>
+    </div>
+
+    <div id="rewardModal" style="display:none;">
+        <div class="modal-content" style="text-align: center;">
+            <h2 style="color: #d35400;">🎉 恭喜答對！</h2>
+            <p id="rewardMessage" style="font-size: 18px; margin: 20px 0;">請選擇您的獎勵...</p>
+            
+            <button class="reward-btn btn-buy" id="btnBuy" onclick="game.selectReward('buy')">
+                💰 購買房產
+            </button>
+            <button class="reward-btn btn-money" id="btnMoney" onclick="game.selectReward('money')">
+                💵 不買，拿獎金
+            </button>
+            <button class="reward-btn btn-roll" id="btnRoll" onclick="game.selectReward('roll')">
+                🎲 不買，再骰一次
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* --- 📝 輔助工具函式 --- */
+        const formatMoney = (amount) => `$${amount.toLocaleString('en-US')}`;
+
+        // 🆕 顯示動態卡片 (Toast)
+        // type: info(藍), success(綠), warning(橘), error(紅)
+        const showToast = (message, icon = "📢", type = "info") => {
+            const toast = document.getElementById('status-toast');
+            const textEl = document.getElementById('status-text');
+            const iconEl = document.getElementById('status-icon');
+            
+            textEl.innerText = message;
+            iconEl.innerText = icon;
+            
+            // 設定顏色
+            let borderColor = "#2196F3"; // info
+            if (type === "success") borderColor = "#4CAF50";
+            if (type === "warning") borderColor = "#FFC107";
+            if (type === "error") borderColor = "#F44336";
+            
+            toast.style.borderColor = borderColor;
+            toast.style.borderLeftWidth = "10px";
+            
+            // 顯示動畫
+            toast.classList.add('show');
+            
+            // 自動隱藏 (3秒後)
+            if (window.toastTimeout) clearTimeout(window.toastTimeout);
+            window.toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        };
+
+        const logEvent = (message) => {
+            const logArea = document.getElementById('log-area');
+            const time = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+            logArea.innerHTML = `<div style="margin-bottom:6px; border-bottom:1px dashed #eee; padding-bottom:2px;"><span style="color:#999; font-size:0.8em;">${time}</span><br>${message}</div>` + logArea.innerHTML;
+        };
+
+        /* --- 🌐 完整題庫資料 (已合併) --- */
+        const ALL_QUESTIONS = [
+            // --- 北部景點 ---
+            { category: "基隆廟口", question: "基隆廟口夜市著名的「鼎邊趖」，主要原料是什麼？", options: ["A. 麵粉", "B. 在來米漿", "C. 綠豆粉", "D. 馬鈴薯泥"], answer: "B. 在來米漿", hint: "提示：它是用米磨成漿，沿著熱鍋邊淋一圈做成的。", description: "A. 麵粉：這是做麵條的。\nB. 在來米漿：正確。鼎邊趖源自福州，是將在來米漿沿著滾燙的鍋邊燒製成麵皮，口感Q彈。\nC. 綠豆粉：這是做冬粉的。\nD. 馬鈴薯泥：這是做薯泥的。" },
+            { category: "九份老街", question: "九份老街的「芋圓」是當地必吃美食，口感Q彈是因為加了什麼？", options: ["A. 麵粉", "B. 地瓜粉/太白粉", "C. 糯米粉", "D. 玉米粉"], answer: "B. 地瓜粉/太白粉", hint: "提示：這種粉常讓食物有Q度。", description: "A. 麵粉：口感較硬。\nB. 地瓜粉/太白粉：正確。這能讓芋圓煮熟後呈現半透明且Q彈的口感。\nC. 糯米粉：這是做湯圓的，口感較黏。\nD. 玉米粉：多用於勾芡。" },
+            { category: "淡水漁人碼頭", question: "淡水漁人碼頭最著名的白色斜張橋叫做什麼？", options: ["A. 情人橋", "B. 關渡大橋", "C. 跨海大橋", "D. 彩虹橋"], answer: "A. 情人橋", hint: "提示：名字跟戀愛有關。", description: "A. 情人橋：正確。這座流線型的白色橋樑是淡水的地標。\nB. 關渡大橋：紅色的拱橋。\nC. 跨海大橋：在澎湖。\nD. 彩虹橋：在松山。" },
+            { category: "台北101", question: "台北101大樓內，用來抵抗強風與地震的金色大圓球是什麼？", options: ["A. 裝飾品", "B. 阻尼器", "C. 蓄水池", "D. 發電機"], answer: "B. 阻尼器", hint: "提示：它像鐘擺一樣，可以抵消大樓的晃動。", description: "A. 裝飾品：它有實際功能。\nB. 阻尼器：正確。這是「調諧質量阻尼器」，重達660噸，是世界唯二開放參觀的阻尼器。\nC. 蓄水池：通常在地下或頂樓。\nD. 發電機：在機房。" },
+            { category: "台北故宮博物院", question: "故宮著名的「翠玉白菜」上面雕刻了哪兩種昆蟲？", options: ["A. 蝴蝶與蜜蜂", "B. 螽斯與蝗蟲", "C. 螞蟻與蟬", "D. 蜘蛛與蒼蠅"], answer: "B. 螽斯與蝗蟲", hint: "提示：象徵多子多孫的昆蟲。", description: "A. 蝴蝶與蜜蜂：非此文物特徵。\nB. 螽斯與蝗蟲：正確。這兩種昆蟲繁殖力強，寓意多子多孫。\nC. 螞蟻與蟬：非此文物特徵。\nD. 蜘蛛與蒼蠅：非吉利象徵。" },
+            { category: "新竹城隍廟", question: "新竹著名的「米粉」之所以好吃，是因為這裡有什麼特殊的氣候條件？", options: ["A. 常下雨", "B. 強勁的九降風", "C. 氣溫很高", "D. 濕度很高"], answer: "B. 強勁的九降風", hint: "提示：新竹又被稱為「風城」。", description: "A. 常下雨：不利曬米粉。\nB. 強勁的九降風：正確。強風能快速風乾米粉，使其口感Q彈。\nC. 氣溫很高：非主要原因。\nD. 濕度很高：會讓米粉發霉。" },
+            { category: "野柳女王頭", question: "野柳女王頭的頸部越來越細，主要是因為什麼作用？", options: ["A. 地震", "B. 風化與侵蝕", "C. 遊客觸摸", "D. 螃蟹挖洞"], answer: "B. 風化與侵蝕", hint: "提示：每天吹風淋雨的自然現象。", description: "A. 地震：非主要原因。\nB. 風化與侵蝕：正確。長期的自然風化讓岩石剝落。\nC. 遊客觸摸：現在已經禁止觸摸。\nD. 螃蟹挖洞：影響微小。" },
+
+            // --- 中部景點 ---
+            { category: "苗栗龍騰斷橋", question: "龍騰斷橋是紅磚拱橋，建造時是用什麼材料黏合的？", options: ["A. 水泥", "B. 糯米、紅糖、石灰", "C. 強力膠", "D. 樹脂"], answer: "B. 糯米、紅糖、石灰", hint: "提示：古時候的智慧，用可以吃的東西。", description: "A. 水泥：當時較少用。\nB. 糯米、紅糖、石灰：正確。這稱為「三合土」，黏性極強。\nC. 強力膠：現代產物。\nD. 樹脂：現代產物。" },
+            { category: "武陵農場", question: "武陵農場的七家灣溪是哪種國寶魚的家鄉？", options: ["A. 櫻花鉤吻鮭", "B. 吳郭魚", "C. 虱目魚", "D. 鮪魚"], answer: "A. 櫻花鉤吻鮭", hint: "提示：出現在2000元鈔票上。", description: "A. 櫻花鉤吻鮭：正確。這是冰河孑遺生物，極其珍貴。\nB. 吳郭魚：平地常見。\nC. 虱目魚：南部養殖多。\nD. 鮪魚：海魚。" },
+            { category: "清境農場", question: "清境農場最受歡迎的表演是？", options: ["A. 賽豬", "B. 鬥牛", "C. 綿羊秀", "D. 賽馬"], answer: "C. 綿羊秀", hint: "提示：會有牧羊犬趕羊和剃毛。", description: "A. 賽豬：三峽祖師廟活動。\nB. 鬥牛：西班牙活動。\nC. 綿羊秀：正確。這是清境的招牌。\nD. 賽馬：后里馬場活動。" },
+            { category: "日月潭", question: "日月潭中央的小島現在叫做什麼？", options: ["A. 光華島", "B. 拉魯島 (Lalu)", "C. 釣魚台", "D. 龜山島"], answer: "B. 拉魯島 (Lalu)", hint: "提示：是邵族的聖地，恢復了原住民名稱。", description: "A. 光華島：舊稱。\nB. 拉魯島 (Lalu)：正確。這是邵族祖靈聖地。\nC. 釣魚台：在宜蘭外海。\nD. 龜山島：在宜蘭。" },
+            { category: "鹿港小鎮", question: "鹿港有條巷子叫「九曲巷」，其設計功能是什麼？", options: ["A. 美觀", "B. 防風與防盜", "C. 迷宮遊戲", "D. 增加走路步數"], answer: "B. 防風與防盜", hint: "提示：彎彎曲曲的讓風吹不進來，壞人也跑不快。", description: "A. 美觀：非主要目的。\nB. 防風與防盜：正確。阻擋九降風並形成防禦優勢。\nC. 迷宮遊戲：非娛樂用途。\nD. 增加走路步數：非目的。" },
+            { category: "阿里山", question: "阿里山小火車為了爬山，會採用什麼特殊的行進方式？", options: ["A. 垂直升降", "B. 之字形 (碰壁)", "C. 螺旋式", "D. 磁浮"], answer: "B. 之字形 (碰壁)", hint: "提示：火車會前進再後退，像寫一個Z字。", description: "A. 垂直升降：這是電梯。\nB. 之字形 (碰壁)：正確。為了克服坡度，火車折返爬升。\nC. 螺旋式：獨立山路段有用到，但最具特色是碰壁。\nD. 磁浮：阿里山沒有磁浮技術。" },
+
+            // --- 南部景點 ---
+            { category: "安平古堡", question: "安平古堡在荷蘭時期原本的名字是？", options: ["A. 紅毛城", "B. 熱蘭遮城", "C. 普羅民遮城", "D. 億載金城"], answer: "B. 熱蘭遮城", hint: "提示：Z開頭的荷蘭名字。", description: "A. 紅毛城：在淡水。\nB. 熱蘭遮城：正確。Fort Zeelandia。\nC. 普羅民遮城：是赤崁樓。\nD. 億載金城：是砲台。" },
+            { category: "赤崁樓", question: "赤崁樓裡有九隻石龜揹著石碑，這石龜其實是龍的兒子，叫做？", options: ["A. 贔屭 (ㄅㄧˋ ㄒㄧˋ)", "B. 貔貅", "C. 麒麟", "D. 饕餮"], answer: "A. 贔屭 (ㄅㄧˋ ㄒㄧˋ)", hint: "提示：喜歡負重，長得像烏龜。", description: "A. 贔屭：正確。龍生九子之一，喜好負重。\nB. 貔貅：招財神獸。\nC. 麒麟：祥瑞神獸。\nD. 饕餮：貪吃神獸。" },
+            { category: "台江國家公園", question: "台江國家公園的「四草綠色隧道」是由什麼植物構成的？", options: ["A. 榕樹", "B. 紅樹林", "C. 柳樹", "D. 椰子樹"], answer: "B. 紅樹林", hint: "提示：生長在海邊濕地，根會露出來。", description: "A. 榕樹：陸地植物。\nB. 紅樹林：正確。主要是五梨跤、海茄苳等。\nC. 柳樹：水邊植物。\nD. 椰子樹：海邊植物但不會形成隧道。" },
+            { category: "旗津彩虹教堂", question: "前往旗津最經典的交通方式是？", options: ["A. 捷運", "B. 渡輪", "C. 飛機", "D. 纜車"], answer: "B. 渡輪", hint: "提示：從鼓山搭船，可以載機車。", description: "A. 捷運：沒到旗津。\nB. 渡輪：正確。鼓山-旗津渡輪是高雄特色。\nC. 飛機：太誇張了。\nD. 纜車：沒有跨海纜車。" },
+            { category: "國立海洋生物博物館", question: "海生館的明星動物，全身白色很聰明的是？", options: ["A. 小白鯨", "B. 大白鯊", "C. 海豚", "D. 北極熊"], answer: "A. 小白鯨", hint: "提示：有「海中金絲雀」之稱。", description: "A. 小白鯨：正確。來自北極，智商很高。\nB. 大白鯊：無法人工飼養。\nC. 海豚：常見，但非最代表性。\nD. 北極熊：是陸生動物。" },
+            { category: "墾丁", question: "台灣最南端的燈塔是？", options: ["A. 富貴角燈塔", "B. 鵝鑾鼻燈塔", "C. 三貂角燈塔", "D. 綠島燈塔"], answer: "B. 鵝鑾鼻燈塔", hint: "提示：位於墾丁，是白色的。", description: "A. 富貴角：最北。\nB. 鵝鑾鼻：正確。最南端，有武裝防禦工事。\nC. 三貂角：最東。\nD. 綠島燈塔：在離島。" },
+
+            // --- 東部與離島 ---
+            { category: "池上伯朗大道", question: "伯朗大道因為誰的廣告而爆紅，還有一棵以他命名的樹？", options: ["A. 周杰倫", "B. 金城武", "C. 蔡依林", "D. 林志玲"], answer: "B. 金城武", hint: "提示：I see you。", description: "A. 周杰倫：非主角。\nB. 金城武：正確。他在樹下喝茶的廣告太經典。\nC. 蔡依林：非主角。\nD. 林志玲：非主角。" },
+            { category: "綠島溫泉", question: "綠島朝日溫泉是罕見的什麼溫泉？", options: ["A. 海底溫泉 (鹹水)", "B. 泥漿溫泉", "C. 硫磺溫泉", "D. 碳酸冷泉"], answer: "A. 海底溫泉 (鹹水)", hint: "提示：就在海邊，水是鹹的。", description: "A. 海底溫泉：正確。全球僅三處。\nB. 泥漿溫泉：關子嶺。\nC. 硫磺溫泉：陽明山。\nD. 碳酸冷泉：蘇澳。" },
+            { category: "蘭嶼燈塔", question: "蘭嶼達悟族最著名的交通工具是？", options: ["A. 竹筏", "B. 拼板舟", "C. 帆船", "D. 快艇"], answer: "B. 拼板舟", hint: "提示：用木板拼接，有美麗圖騰，不用釘子。", description: "A. 竹筏：阿美族常用。\nB. 拼板舟：正確。造型優美，用於捉飛魚。\nC. 帆船：非傳統工具。\nD. 快艇：現代工具。" },
+            { category: "七星潭", question: "七星潭的海邊充滿了什麼石頭？", options: ["A. 細沙", "B. 鵝卵石", "C. 珊瑚礁", "D. 玄武岩"], answer: "B. 鵝卵石", hint: "提示：圓圓滑滑的石頭。", description: "A. 細沙：海水浴場才有。\nB. 鵝卵石：正確。這裡以礫灘聞名。\nC. 珊瑚礁：墾丁較多。\nD. 玄武岩：澎湖較多。" },
+            { category: "太魯閣峽谷", question: "太魯閣峽谷主要是由哪條河流切割出來的？", options: ["A. 濁水溪", "B. 立霧溪", "C. 秀姑巒溪", "D. 蘭陽溪"], answer: "B. 立霧溪", hint: "提示：這條溪流經花蓮。", description: "A. 濁水溪：在中部。\nB. 立霧溪：正確。千萬年的侵蝕造就了峽谷。\nC. 秀姑巒溪：泛舟著名。\nD. 蘭陽溪：在宜蘭。" },
+            { category: "宜蘭蘭陽博物館", question: "蘭陽博物館的建築外觀靈感來自什麼地形？", options: ["A. 龜山島", "B. 單面山", "C. 豆腐岩", "D. 懸崖"], answer: "B. 單面山", hint: "提示：一邊陡峭一邊平緩的岩石。", description: "A. 龜山島：是眺望目標。\nB. 單面山：正確。北關海岸常見的地形。\nC. 豆腐岩：形狀不同。\nD. 懸崖：形狀不同。" },
+            { category: "澎湖雙心石滬", question: "雙心石滬的主要功能是什麼？", options: ["A. 養魚", "B. 捕魚陷阱", "C. 祈福", "D. 防波堤"], answer: "B. 捕魚陷阱", hint: "提示：魚進得來出不去。", description: "A. 養魚：非養殖場。\nB. 捕魚陷阱：正確。利用潮汐困住魚群。\nC. 祈福：非宗教用途。\nD. 防波堤：非主要用途。" },
+            { category: "金門酒廠", question: "金門高粱酒最經典的酒精濃度是幾度？", options: ["A. 38度", "B. 58度", "C. 40度", "D. 60度"], answer: "B. 58度", hint: "提示：俗稱白金龍。", description: "A. 38度：較淡。\nB. 58度：正確。口感凜冽香醇。\nC. 40度：白蘭地常見。\nD. 60度：原酒。" },
+            { category: "馬祖藍眼淚", question: "藍眼淚其實是一種什麼生物發光？", options: ["A. 水母", "B. 夜光蟲 (藻類)", "C. 螢火蟲", "D. 小魚"], answer: "B. 夜光蟲 (藻類)", hint: "提示：單細胞生物，受刺激會發光。", description: "A. 水母：體型較大。\nB. 夜光蟲：正確。渦鞭毛藻的一種。\nC. 螢火蟲：在陸地。\nD. 小魚：不會整片發藍光。" },
+
+            // --- 特殊主題 (含難度) ---
+            { category: "世界飲料", difficulty: "低", question: "珍珠奶茶發源於哪裡？", options: ["A. 香港", "B. 台灣", "C. 泰國", "D. 日本"], answer: "B. 台灣", hint: "提示：我們住的地方。", description: "正確！台灣是珍奶的故鄉。" },
+            { category: "世界飲料", difficulty: "中", question: "愛爾蘭著名的黑啤酒是？", options: ["A. 海尼根", "B. 健力士 (Guinness)", "C. 百威", "D. 台啤"], answer: "B. 健力士 (Guinness)", hint: "提示：深黑色的酒體。", description: "正確！Guinness 是愛爾蘭國寶。" },
+            { category: "世界飲料", difficulty: "高", question: "麝香貓咖啡產自哪裡？", options: ["A. 巴西", "B. 印尼", "C. 肯亞", "D. 越南"], answer: "B. 印尼", hint: "提示：萬島之國。", description: "正確！Kopi Luwak 來自印尼。" },
+            
+            { category: "世界特殊節日", difficulty: "低", question: "泰國潑水節是為了慶祝？", options: ["A. 新年", "B. 國慶", "C. 豐收", "D. 佛誕"], answer: "A. 新年", hint: "提示：洗去霉運迎新春。", description: "正確！宋干節就是泰國新年。" },
+            { category: "世界特殊節日", difficulty: "中", question: "西班牙番茄大戰在哪個小鎮舉辦？", options: ["A. 馬德里", "B. 布尼奧爾", "C. 巴塞隆納", "D. 塞維亞"], answer: "B. 布尼奧爾", hint: "提示：一個小鎮。", description: "正確！每年八月舉辦。" },
+            { category: "世界特殊節日", difficulty: "高", question: "墨西哥亡靈節用什麼花鋪路？", options: ["A. 玫瑰", "B. 萬壽菊", "C. 百合", "D. 菊花"], answer: "B. 萬壽菊", hint: "提示：橘黃色的花。", description: "正確！相信花香能引領靈魂。" },
+
+            { category: "歷史知識終極挑戰", difficulty: "低", question: "草船借箭的主角是？", options: ["A. 曹操", "B. 諸葛亮", "C. 周瑜", "D. 孫權"], answer: "B. 諸葛亮", hint: "提示：孔明。", description: "正確！諸葛亮利用大霧借箭。" },
+            { category: "歷史知識終極挑戰", difficulty: "中", question: "工業革命發源於？", options: ["A. 美國", "B. 英國", "C. 法國", "D. 德國"], answer: "B. 英國", hint: "提示：蒸汽機。", description: "正確！18世紀英國率先開始。" },
+            { category: "歷史知識終極挑戰", difficulty: "高", question: "埃及豔后是哪個血統？", options: ["A. 埃及", "B. 希臘 (馬其頓)", "C. 羅馬", "D. 波斯"], answer: "B. 希臘 (馬其頓)", hint: "提示：托勒密王朝。", description: "正確！她是亞歷山大部將的後裔。" },
+
+            { category: "動物奇觀知識挑戰", difficulty: "低", question: "陸地跑最快的動物？", options: ["A. 獅子", "B. 獵豹", "C. 馬", "D. 羚羊"], answer: "B. 獵豹", hint: "提示：有淚溝斑點。", description: "正確！時速可達120公里。" },
+            { category: "動物奇觀知識挑戰", difficulty: "中", question: "長頸鹿舌頭顏色？", options: ["A. 紅", "B. 藍紫", "C. 黃", "D. 白"], answer: "B. 藍紫", hint: "提示：防曬。", description: "正確！深色可防止曬傷。" },
+            { category: "動物奇觀知識挑戰", difficulty: "高", question: "睡覺時間最少的哺乳動物？", options: ["A. 長頸鹿", "B. 樹懶", "C. 貓", "D. 豬"], answer: "A. 長頸鹿", hint: "提示：怕被吃掉。", description: "正確！一天只睡幾十分鐘。" }
+        ];
+
+        /* --- 👤 Player 類別 --- */
+        class Player {
+            constructor(id, name, tokenColor, initialMoney) {
+                this.id = id;
+                this.name = name;
+                this.money = initialMoney;
+                this.position = 0;
+                this.properties = [];
+                this.inJail = false;
+                this.jailTurns = 0;
+                this.tokenColor = tokenColor;
+            }
+            
+            get totalAsset() {
+                let assetValue = this.money;
+                this.properties.forEach(propIndex => {
+                    assetValue += game.mapTiles[propIndex].price;
+                });
+                return assetValue;
+            }
+        }
+
+        /* --- 🎲 Game 核心類別 --- */
+        class Game {
+            constructor() {
+                this.players = [];
+                this.mapTiles = [];
+                this.activePlayerIndex = 0;
+                this.totalTurns = 0;
+                this.currentTurn = 1;
+                this.isRolling = false;
+                this.initialMoney = 0;
+                this.currentRewardData = {}; // 暫存三選一資料
+                this.usedQuestions = new Set(); // 🚫 新增：記錄已出過的題目
+            }
+
+            init(playerNames, initialMoney, totalTurns) {
+                this.totalTurns = parseInt(totalTurns);
+                this.initialMoney = parseInt(initialMoney);
+                this.usedQuestions.clear(); // 重置已出題目
+
+                const tokenColors = ['#F44336', '#2196F3', '#FF9800', '#9C27B0'];
+                
+                this.players = playerNames.map((name, index) => {
+                    return new Player(index, name, tokenColors[index], this.initialMoney);
+                });
+
+                this.generateMapData();
+                this.renderBoard();
+                this.updateStats();
+                this.updateCenterInfo();
+                logEvent(`🏁 遊戲開始！目標回合：${totalTurns}`);
+                showToast("歡迎開始環島之旅！", "🚗", "info");
+            }
+
+            // --- 🗺️ 生成 40 格台灣環島地圖 (28 景點 + 特殊格) ---
+            generateMapData() {
+                // 定義地圖配置 (30個有定義的格子，會自動補滿40格)
+                const layout = [
+                    // 底邊 (0-10)
+                    { name: "起點", type: "start", rent: 2000 },
+                    { name: "基隆廟口", type: "place", category: "基隆廟口", price: 1500, rent: 150, group: "north" },
+                    { name: "野柳女王頭", type: "place", category: "野柳女王頭", price: 1600, rent: 160, group: "north" },
+                    { name: "時光隧道", type: "chance", category: "歷史知識終極挑戰" }, // 特殊 1
+                    { name: "九份老街", type: "place", category: "九份老街", price: 1800, rent: 180, group: "north" },
+                    { name: "淡水碼頭", type: "place", category: "淡水漁人碼頭", price: 2200, rent: 220, group: "north" },
+                    { name: "台北101", type: "place", category: "台北101", price: 5000, rent: 500, group: "north" },
+                    { name: "故宮博物院", type: "place", category: "台北故宮博物院", price: 4000, rent: 400, group: "north" },
+                    { name: "新竹城隍廟", type: "place", category: "新竹城隍廟", price: 2300, rent: 230, group: "north" },
+                    { name: "苗栗龍騰斷橋", type: "place", category: "苗栗龍騰斷橋", price: 2000, rent: 200, group: "center" },
+                    { name: "監獄", type: "jail" }, // 10
+
+                    // 左邊 (11-20)
+                    { name: "動物探索", type: "chance", category: "動物奇觀知識挑戰" }, // 特殊 2
+                    { name: "武陵農場", type: "place", category: "武陵農場", price: 2800, rent: 280, group: "center" },
+                    { name: "清境農場", type: "place", category: "清境農場", price: 3000, rent: 300, group: "center" },
+                    { name: "日月潭", type: "place", category: "日月潭", price: 3200, rent: 320, group: "center" },
+                    { name: "鹿港小鎮", type: "place", category: "鹿港小鎮", price: 2400, rent: 240, group: "center" },
+                    { name: "阿里山", type: "place", category: "阿里山", price: 3500, rent: 350, group: "south" },
+                    { name: "世界酒吧", type: "chance", category: "世界飲料" }, // 特殊 3
+                    { name: "安平古堡", type: "place", category: "安平古堡", price: 2300, rent: 230, group: "south" },
+                    { name: "赤崁樓", type: "place", category: "赤崁樓", price: 2200, rent: 220, group: "south" },
+                    { name: "海豚運輸", type: "transport" }, // 20
+
+                    // 上邊 (21-30)
+                    { name: "台江公園", type: "place", category: "台江國家公園", price: 2500, rent: 250, group: "south" },
+                    { name: "彩虹教堂", type: "place", category: "旗津彩虹教堂", price: 2600, rent: 260, group: "south" },
+                    { name: "海生館", type: "place", category: "國立海洋生物博物館", price: 2800, rent: 280, group: "south" },
+                    { name: "墾丁", type: "place", category: "墾丁", price: 3000, rent: 300, group: "south" },
+                    { name: "環球慶典", type: "chance", category: "世界特殊節日" }, // 特殊 4
+                    { name: "伯朗大道", type: "place", category: "池上伯朗大道", price: 2600, rent: 260, group: "east" },
+                    { name: "綠島溫泉", type: "place", category: "綠島溫泉", price: 2400, rent: 240, group: "island" },
+                    { name: "蘭嶼燈塔", type: "place", category: "蘭嶼燈塔", price: 2500, rent: 250, group: "island" },
+                    { name: "七星潭", type: "place", category: "七星潭", price: 2400, rent: 240, group: "east" },
+                    { name: "進監獄", type: "go-to-jail" }, // 30
+
+                    // 右邊 (31-39)
+                    { name: "太魯閣", type: "place", category: "太魯閣峽谷", price: 3000, rent: 300, group: "east" },
+                    { name: "蘭陽博物館", type: "place", category: "宜蘭蘭陽博物館", price: 2500, rent: 250, group: "east" },
+                    { name: "雙心石滬", type: "place", category: "澎湖雙心石滬", price: 2700, rent: 270, group: "island" },
+                    { name: "金門酒廠", type: "place", category: "金門酒廠", price: 1800, rent: 180, group: "island" },
+                    { name: "馬祖藍眼淚", type: "place", category: "馬祖藍眼淚", price: 2500, rent: 250, group: "island" },
+                    // 填補空缺的格子
+                    { name: "機會", type: "chance", category: "歷史知識終極挑戰" },
+                    { name: "命運", type: "chance", category: "動物奇觀知識挑戰" },
+                    { name: "所得稅", type: "tax", penalty: 2000 },
+                    { name: "奢侈稅", type: "tax", penalty: 1000 }
+                ];
+
+                this.mapTiles = layout.map((tile, index) => {
+                    return { ...tile, index: index, owner: null };
+                });
+            }
+            
+            rollDice(isBonusRoll = false) {
+                if (this.isRolling) return;
+                this.isRolling = true;
+                
+                const player = this.players[this.activePlayerIndex];
+                
+                if (!isBonusRoll) {
+                    document.getElementById('btn-roll').disabled = true;
+                }
+
+                const dice1 = Math.floor(Math.random() * 6) + 1;
+                const dice2 = Math.floor(Math.random() * 6) + 1;
+                const total = dice1 + dice2;
+                
+                document.getElementById('dice-display').innerText = `⚁ ${dice1} + ⚅ ${dice2} = ${total}`;
+                logEvent(`${player.name} 擲出了 ${total} 點${isBonusRoll ? ' (再骰一次)' : ''}。`);
+                showToast(`${player.name} 擲出了 ${total} 點！`, "🎲", "info");
+
+                // 監獄邏輯
+                if (player.inJail && !isBonusRoll) {
+                     if (dice1 === dice2) {
+                        player.inJail = false;
+                        player.jailTurns = 0;
+                        logEvent(`✅ ${player.name} 擲出雙骰，出獄！`);
+                        showToast("恭喜出獄！", "🔓", "success");
+                     } else {
+                        player.jailTurns++;
+                        logEvent(`❌ 未擲出雙骰，停留監獄。`);
+                        if (player.jailTurns >= 3) {
+                             player.inJail = false;
+                             logEvent(`❗ 刑期已滿，強制出獄。`);
+                             showToast("刑期已滿，出獄！", "🔓", "warning");
+                        } else {
+                            setTimeout(() => this.endTurn(), 1000);
+                            return;
+                        }
+                     }
+                }
+
+                let oldPos = player.position;
+                let newPos = (player.position + total) % this.mapTiles.length;
+                
+                // 經過起點獎勵
+                if (newPos < oldPos && oldPos !== 0) {
+                    player.money += 2000;
+                    logEvent(`💰 經過起點，獲得 $2000！`);
+                    showToast("經過起點，領取 $2000 補助金！", "💰", "success");
+                    this.updateStats();
+                }
+                
+                player.position = newPos;
+                this.updateTokenPosition(player.id, oldPos, newPos, total);
+                
+                setTimeout(() => {
+                    this.handleTileAction(newPos, isBonusRoll);
+                }, 800);
+            }
+
+            // --- 👣 踩格子觸發事件 ---
+            handleTileAction(tileIndex, isBonusRoll) {
+                const tile = this.mapTiles[tileIndex];
+                const player = this.players[this.activePlayerIndex];
+
+                switch (tile.type) {
+                    case 'start':
+                    case 'jail':
+                    case 'free-parking':
+                        logEvent(`${player.name} 停在 ${tile.name}。`);
+                        showToast(`停在 ${tile.name}`, "📍", "info");
+                        this.endTurn(isBonusRoll);
+                        break;
+                    
+                    case 'go-to-jail':
+                        logEvent(`🚨 ${player.name} 被送進監獄！`);
+                        showToast("被警察抓走啦！", "🚨", "error");
+                        player.position = 10;
+                        player.inJail = true;
+                        this.updateTokenPosition(player.id, tileIndex, 10, 0);
+                        this.endTurn(isBonusRoll);
+                        break;
+
+                    case 'transport':
+                        logEvent(`🐬 ${player.name} 搭乘海豚，傳送至隨機地點！`);
+                        showToast("搭乘海豚傳送中...", "🐬", "info");
+                        let randomPos = Math.floor(Math.random() * 40);
+                        player.position = randomPos;
+                        this.updateTokenPosition(player.id, tileIndex, randomPos, 0);
+                        setTimeout(() => this.handleTileAction(randomPos, isBonusRoll), 800);
+                        break;
+
+                    case 'tax':
+                        player.money -= tile.penalty;
+                        logEvent(`💸 繳納 ${tile.name} $${tile.penalty}`);
+                        showToast(`繳納 ${tile.name} $${tile.penalty}`, "💸", "error");
+                        this.updateStats();
+                        this.endTurn(isBonusRoll);
+                        break;
+
+                    case 'place': // 📍 地點格：判斷買地或付租金
+                        this.handlePlaceAction(player, tile, isBonusRoll);
+                        break;
+
+                    case 'chance': // 🎲 特殊格：知識挑戰
+                        this.handleSpecialAction(player, tile, isBonusRoll);
+                        break;
+                }
+            }
+
+            // --- 📍 地點格邏輯 (含三選一) ---
+            handlePlaceAction(player, tile, isBonusRoll) {
+                // 1. 自己的地 -> 沒事
+                if (tile.owner === player.id) {
+                    logEvent(`🏠 回到自己的 ${tile.name}。`);
+                    showToast("回到甜蜜的家", "🏠", "success");
+                    this.endTurn(isBonusRoll);
+                    return;
+                }
+
+                // 2. 別人的地 -> 答題 (答對減租 / 答錯全額)
+                if (tile.owner !== null) {
+                    const owner = this.players[tile.owner];
+                    logEvent(`🛑 踩到 ${owner.name} 的地，準備支付租金...`);
+                    showToast(`踩到 ${owner.name} 的地盤！`, "🛑", "warning");
+                    this.askQuestion(player, tile, 'rent', isBonusRoll, owner);
+                    return;
+                }
+
+                // 3. 無主地 -> 答題 (答對三選一 / 答錯扣錢)
+                if (tile.owner === null) {
+                    logEvent(`🚩 發現無主地 ${tile.name} ($${tile.price})`);
+                    showToast(`抵達 ${tile.name}，準備佔領！`, "🚩", "info");
+                    this.askQuestion(player, tile, 'buy', isBonusRoll);
+                }
+            }
+
+            // --- 🎲 特殊格邏輯 (依難度給獎金) ---
+            handleSpecialAction(player, tile, isBonusRoll) {
+                logEvent(`✨ 進入 ${tile.name}，準備接受知識挑戰！`);
+                showToast("觸發特殊知識挑戰！", "✨", "info");
+                this.askQuestion(player, tile, 'special', isBonusRoll);
+            }
+
+            // --- ❓ 出題核心函數 (含防重複機制) ---
+            askQuestion(player, tile, actionType, isBonusRoll, owner = null) {
+                // 根據格子 category 找題目
+                const questions = ALL_QUESTIONS.filter(q => q.category === tile.category);
+                
+                if (questions.length === 0) {
+                    console.error("找不到題目: " + tile.category);
+                    this.endTurn(isBonusRoll); 
+                    return;
+                }
+
+                // 🚫 過濾已出過的題目
+                let availableQuestions = questions.filter(q => !this.usedQuestions.has(q.question));
+
+                // 如果該分類題目都出完了，重置該分類的記錄
+                if (availableQuestions.length === 0) {
+                    logEvent(`⚠️ 【${tile.category}】題目已用盡，重新洗牌！`);
+                    // 從 usedQuestions 中移除該分類的所有題目
+                    questions.forEach(q => this.usedQuestions.delete(q.question));
+                    availableQuestions = questions; // 重新使用所有題目
+                }
+
+                // 隨機抽一題
+                const qData = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+                
+                // 📝 記錄這題已經出過
+                this.usedQuestions.add(qData.question);
+
+                // 顯示 Modal
+                const modal = document.getElementById('modal');
+                const titleEl = document.getElementById('modal-title');
+                const bodyEl = document.getElementById('modal-body');
+                const optionsEl = document.getElementById('modal-options');
+                const footerEl = document.getElementById('modal-footer');
+
+                modal.style.display = 'flex';
+                titleEl.innerText = `【${tile.name}】知識挑戰`;
+                
+                // 顯示題目 + 提示
+                bodyEl.innerHTML = `
+                    <p style="font-size:1.2em; font-weight:bold;">${qData.question}</p>
+                    <div class="hint-box">💡 ${qData.hint}</div>
+                `;
+
+                optionsEl.innerHTML = '';
+                qData.options.forEach((opt, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'option-btn';
+                    btn.innerText = opt;
+                    // 綁定點擊事件：檢查答案
+                    btn.onclick = () => {
+                        this.checkAnswer(opt.charAt(0), qData, tile, actionType, isBonusRoll, owner);
+                    };
+                    optionsEl.appendChild(btn);
+                });
+
+                footerEl.innerHTML = ''; // 清空舊按鈕
+            }
+
+            // --- ✅❌ 檢查答案 & 顯示解析 (修正版) ---
+            checkAnswer(userAns, qData, tile, actionType, isBonusRoll, owner) {
+                const modalBody = document.getElementById('modal-body');
+                const optionsEl = document.getElementById('modal-options');
+                const footerEl = document.getElementById('modal-footer');
+                const correctAns = qData.answer.charAt(0);
+                const isCorrect = (userAns === correctAns);
+
+                let resultTitle = isCorrect ? "<span style='color:green'>🎉 答對了！</span>" : "<span style='color:red'>😢 答錯了...</span>";
+                
+                modalBody.innerHTML = `
+                    <h2 style="text-align:center;">${resultTitle}</h2>
+                    <p style="font-size:1.1em;">您的答案：<b>${userAns}</b></p>
+                    <p style="font-size:1.1em;">正確答案：<b>${qData.answer}</b></p>
+                    <div class="analysis-box">📖 <b>解析：</b><br>${qData.description}</div>
+                `;
+                optionsEl.innerHTML = ''; 
+
+                const nextBtn = document.createElement('button');
+                nextBtn.className = 'btn';
+                nextBtn.innerText = '下一步';
+                nextBtn.onclick = () => {
+                    document.getElementById('modal').style.display = 'none';
+                    this.processResult(isCorrect, tile, actionType, isBonusRoll, owner, qData);
+                };
+                
+                footerEl.innerHTML = ''; 
+                footerEl.appendChild(nextBtn);
+            }
+
+            // --- ⚖️ 處理結果 (獎懲邏輯) ---
+            processResult(isCorrect, tile, actionType, isBonusRoll, owner, qData) {
+                const player = this.players[this.activePlayerIndex];
+
+                if (actionType === 'buy') {
+                    // --- 買房情境 ---
+                    if (isCorrect) {
+                        // 答對 -> 顯示三選一視窗
+                        this.showRewardSelection(tile, isBonusRoll);
+                    } else {
+                        // 答錯 -> 扣 $500
+                        player.money -= 500;
+                        logEvent(`❌ 答錯扣除獎金 $500，失去購買機會。`);
+                        showToast("答錯了，無法購買！", "❌", "error");
+                        this.updateStats();
+                        this.endTurn(isBonusRoll);
+                    }
+
+                } else if (actionType === 'rent') {
+                    // --- 付租金情境 ---
+                    let rent = tile.rent;
+                    if (isCorrect) {
+                        rent = Math.floor(rent * 0.5); // 答對打5折
+                        logEvent(`✅ 答對！租金減半為 $${rent}`);
+                        showToast(`答對！租金減半 $${rent}`, "📉", "success");
+                    } else {
+                        logEvent(`❌ 答錯！支付全額租金 $${rent}`);
+                        showToast(`答錯！支付全額 $${rent}`, "💸", "error");
+                    }
+                    player.money -= rent;
+                    owner.money += rent;
+                    this.updateStats();
+                    this.endTurn(isBonusRoll);
+
+                } else if (actionType === 'special') {
+                    // --- 特殊格情境 ---
+                    if (isCorrect) {
+                        let bonus = 1500; // 預設
+                        if (qData.difficulty === "低") bonus = 1000;
+                        if (qData.difficulty === "中") bonus = 1500;
+                        if (qData.difficulty === "高") bonus = 2000;
+                        
+                        player.money += bonus;
+                        logEvent(`🎉 特殊挑戰成功 (${qData.difficulty})！獲得獎金 $${bonus}`);
+                        showToast(`挑戰成功！獲得 $${bonus}`, "🏆", "success");
+                    } else {
+                        player.money -= 500;
+                        logEvent(`❌ 挑戰失敗，扣除 $500。`);
+                        showToast("挑戰失敗，扣除 $500", "💥", "error");
+                    }
+                    this.updateStats();
+                    this.endTurn(isBonusRoll);
+                }
+            }
+
+            // --- 🎁 顯示三選一獎勵 ---
+            showRewardSelection(tile, isBonusRoll) {
+                const landPrice = tile.price;
+                const rentPrice = tile.rent;
+                const bonusCash = Math.floor(landPrice * 0.2); // 獎金是地價20%
+                // 9折優惠價
+                const discountedPrice = Math.floor(landPrice * 0.9);
+                
+                // 儲存當前狀態供按鈕呼叫
+                this.currentRewardData = { tile, isBonusRoll, landPrice, discountedPrice, rentPrice, bonusCash };
+
+                // 更新按鈕文字
+                document.getElementById('rewardMessage').innerText = `您現在位於【${tile.name}】(原價 $${landPrice})`;
+                // 修改按鈕顯示：強調優惠價格
+                document.getElementById('btnBuy').innerText = `💰 9折優惠購買 ($${landPrice} ➔ $${discountedPrice})`;
+                document.getElementById('btnMoney').innerText = `💵 不買，拿獎金 (+$${bonusCash})`;
+                document.getElementById('btnRoll').innerText = `🎲 不買，再骰一次`;
+
+                document.getElementById('rewardModal').style.display = 'block';
+            }
+
+            // --- 🖱️ 執行三選一 ---
+            selectReward(choice) {
+                const player = this.players[this.activePlayerIndex];
+                const { tile, isBonusRoll, landPrice, discountedPrice, bonusCash } = this.currentRewardData;
+
+                document.getElementById('rewardModal').style.display = 'none';
+
+                if (choice === 'buy') {
+                    if (player.money >= discountedPrice) {
+                        player.money -= discountedPrice; // 扣除打折後的錢
+                        tile.owner = player.id;
+                        tile.rent = Math.floor(tile.rent * 0.9); // 買下後租金設定為9折(或是初始設定)
+                        player.properties.push(tile.index);
+                        logEvent(`🏠 ${player.name} 以優惠價 $${discountedPrice} 買下了 ${tile.name}！`);
+                        showToast(`買下 ${tile.name}！`, "🏠", "success");
+                        
+                        // 更新地圖邊框顏色
+                        const tileEl = document.getElementById(`tile-${tile.index}`);
+                        tileEl.style.border = `3px solid ${player.tokenColor}`;
+                    } else {
+                        alert("現金不足，改為獲得獎金！");
+                        player.money += bonusCash;
+                        logEvent(`💵 沒錢買房，改拿獎金 $${bonusCash}`);
+                        showToast(`現金不足，改拿獎金`, "💵", "warning");
+                    }
+                    this.updateStats();
+                    this.endTurn(isBonusRoll);
+
+                } else if (choice === 'money') {
+                    player.money += bonusCash;
+                    logEvent(`💵 ${player.name} 選擇拿獎金 $${bonusCash}`);
+                    showToast(`獲得獎金 $${bonusCash}`, "💵", "success");
+                    this.updateStats();
+                    this.endTurn(isBonusRoll);
+
+                } else if (choice === 'roll') {
+                    logEvent(`🎲 ${player.name} 選擇再骰一次！`);
+                    showToast("再骰一次！", "🎲", "info");
+                    // 重新開啟骰子按鈕
+                    this.isRolling = false;
+                    document.getElementById('btn-roll').disabled = false;
+                    // 不呼叫 endTurn，讓玩家自己按
+                }
+            }
+
+            updateTokenPosition(playerId, oldPos, newPos, totalSteps) {
+                const token = document.getElementById(`token-${playerId}`);
+                const targetTile = document.getElementById(`tile-${newPos}`);
+                if (token && targetTile) {
+                    targetTile.appendChild(token);
+                    this.updatePlayerTokenDisplay(newPos);
+                    this.updatePlayerTokenDisplay(oldPos);
+                }
+            }
+
+            updatePlayerTokenDisplay(tileIndex) {
+                const tile = document.getElementById(`tile-${tileIndex}`);
+                const tokens = tile.querySelectorAll('.player-token');
+                tile.setAttribute('data-player-count', tokens.length);
+            }
+
+            updateStats() {
+                const statsDiv = document.getElementById('players-stats');
+                statsDiv.innerHTML = '';
+                this.players.forEach(p => {
+                    const isActive = (p.id === this.players[this.activePlayerIndex].id);
+                    statsDiv.innerHTML += `
+                        <div class="player-card ${isActive ? 'active' : ''}" style="border-left-color:${p.tokenColor}">
+                            <div style="font-weight:bold;">${p.name} <span style="float:right;">$${p.money}</span></div>
+                            <div style="font-size:0.8em; color:#666;">資產: $${p.totalAsset}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            updateCenterInfo() {
+                const player = this.players[this.activePlayerIndex];
+                document.getElementById('active-player-name').innerText = player.name;
+                document.getElementById('active-player-name').style.color = player.tokenColor;
+                document.getElementById('current-turn').innerText = this.currentTurn;
+                document.getElementById('turns-left').innerText = this.totalTurns;
+            }
+
+            endTurn(isBonusRoll) {
+                if (isBonusRoll) return; // 如果是獎勵骰，不換人
+
+                this.isRolling = false;
+                document.getElementById('btn-roll').disabled = false;
+                
+                this.activePlayerIndex = (this.activePlayerIndex + 1) % this.players.length;
+                if (this.activePlayerIndex === 0) {
+                    this.currentTurn++;
+                }
+
+                if (this.currentTurn > this.totalTurns) {
+                    this.showFinalResult();
+                    return;
+                }
+
+                this.updateCenterInfo();
+                this.updateStats();
+                
+                const nextPlayer = this.players[this.activePlayerIndex];
+                showToast(`輪到 ${nextPlayer.name} 了！`, "👉", "info");
+            }
+
+            // --- 🏁 強制結束遊戲 ---
+            endGameNow() {
+                if(confirm("確定要現在結束遊戲並結算成績嗎？")) {
+                    this.showFinalResult();
+                }
+            }
+
+            // --- 📊 結算畫面 ---
+            showFinalResult() {
+                // 依照總資產排序
+                const sortedPlayers = [...this.players].sort((a, b) => b.totalAsset - a.totalAsset);
+                const winner = sortedPlayers[0];
+
+                let rankingHtml = '<ol style="text-align:left; font-size:1.1em; line-height:1.8;">';
+                sortedPlayers.forEach((p, idx) => {
+                    rankingHtml += `<li><b>${p.name}</b>: 總資產 ${formatMoney(p.totalAsset)} (現金 ${formatMoney(p.money)})</li>`;
+                });
+                rankingHtml += '</ol>';
+
+                // 使用 Modal 顯示結果，並提供「重新開始」按鈕
+                const modal = document.getElementById('modal');
+                const titleEl = document.getElementById('modal-title');
+                const bodyEl = document.getElementById('modal-body');
+                const optionsEl = document.getElementById('modal-options');
+                const footerEl = document.getElementById('modal-footer');
+
+                modal.style.display = 'flex';
+                titleEl.innerText = `🏆 遊戲結束！恭喜 ${winner.name} 獲勝！`;
+                bodyEl.innerHTML = rankingHtml;
+                optionsEl.innerHTML = '';
+                
+                footerEl.innerHTML = '';
+                const restartBtn = document.createElement('button');
+                restartBtn.className = 'btn';
+                restartBtn.innerText = '🔄 重新開始';
+                restartBtn.onclick = () => location.reload();
+                footerEl.appendChild(restartBtn);
+            }
+
+            renderBoard() {
+                const board = document.getElementById('board');
+                // 保留中心區域，清除格子
+                const centerHtml = board.querySelector('.center-area').outerHTML;
+                board.innerHTML = centerHtml;
+
+                this.mapTiles.forEach(tile => {
+                    const el = document.createElement('div');
+                    el.className = 'tile';
+                    el.id = `tile-${tile.index}`;
+                    el.setAttribute('data-player-count', 0);
+                    
+                    // 根據索引計算 Grid 位置 (11x11)
+                    let col, row;
+                    const idx = tile.index;
+                    if (idx <= 10) { row = 11; col = 11 - idx; } // 下
+                    else if (idx <= 20) { row = 11 - (idx - 10); col = 1; el.classList.add('vertical'); } // 左
+                    else if (idx <= 30) { row = 1; col = (idx - 20) + 1; } // 上
+                    else { row = (idx - 30) + 1; col = 11; el.classList.add('vertical'); } // 右
+
+                    el.style.gridRow = row;
+                    el.style.gridColumn = col;
+
+                    // 內容
+                    let headerColor = '#ccc';
+                    if (tile.group === 'north') headerColor = 'var(--group-north)';
+                    if (tile.group === 'center') headerColor = 'var(--group-center)';
+                    if (tile.group === 'south') headerColor = 'var(--group-south)';
+                    if (tile.group === 'east') headerColor = 'var(--group-east)';
+                    if (tile.group === 'island') headerColor = 'var(--group-island)';
+                    if (tile.type === 'chance') headerColor = 'var(--chance-color)';
+
+                    let innerHTML = '';
+                    if (tile.type === 'place') {
+                        innerHTML = `
+                            <div class="tile-header" style="background:${headerColor}"></div>
+                            <div class="tile-content">
+                                <div class="tile-name">${tile.name}</div>
+                                <div>$${tile.price}</div>
+                            </div>`;
+                    } else if (tile.type === 'chance') {
+                        innerHTML = `
+                            <div class="tile-header" style="background:${headerColor}"></div>
+                            <div class="tile-content"><div class="tile-name">${tile.name}</div>❓</div>`;
+                    } else {
+                        innerHTML = `<div class="tile-content"><div class="tile-name">${tile.name}</div></div>`;
+                    }
+                    
+                    el.innerHTML = innerHTML;
+                    board.appendChild(el);
+                });
+
+                // 放置玩家
+                this.players.forEach(p => {
+                    const token = document.createElement('div');
+                    token.className = 'player-token';
+                    token.id = `token-${p.id}`;
+                    token.style.backgroundColor = p.tokenColor;
+                    token.innerText = p.id + 1;
+                    document.getElementById(`tile-${p.position}`).appendChild(token);
+                });
+                this.updatePlayerTokenDisplay(0);
+            }
+        }
+
+        /* --- 🚀 啟動 --- */
+        let game = new Game();
+
+        window.updatePlayerInputs = function() {
+            const count = document.getElementById('player-count').value;
+            const container = document.getElementById('player-names-container');
+            container.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                container.innerHTML += `<input type="text" class="player-name-input" placeholder="玩家 ${i+1} 名稱" value="玩家 ${i+1}">`;
+            }
+        }
+
+        window.startGame = function() {
+            const names = Array.from(document.querySelectorAll('.player-name-input')).map(i => i.value);
+            const money = document.getElementById('initial-money').value;
+            const turns = document.getElementById('game-turns').value;
+            
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            
+            game.init(names, money, turns);
+        }
+
+        // 初始化輸入框
+        updatePlayerInputs();
+    </script>
+</body>
+</html>
